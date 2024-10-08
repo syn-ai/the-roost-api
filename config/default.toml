@@ -1,0 +1,7 @@
+[server]
+host = "127.0.0.1"
+port = 3000
+
+[ai_service]
+url = "https://hub-agentartificial.ngrok.dev/v1/api"
+api_key = "sk-1234"

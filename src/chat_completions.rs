@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use futures::StreamExt;
 use bytes::BytesMut;
-
+use crate::config::Settings;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ChatCompletionRequest {
     pub model: String,
@@ -32,7 +32,7 @@ pub struct Choice {
     pub finish_reason: String,
 }
 
-pub async fn handle_chat_completion(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+pub async fn handle_chat_completion(req: Request<Body>, settings: Settings) -> Result<Response<Body>, hyper::Error> {
     let mut body = BytesMut::new();
     let mut stream = req.into_body();
 
@@ -61,10 +61,10 @@ pub async fn handle_chat_completion(req: Request<Body>) -> Result<Response<Body>
 
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
-    headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer sk-1234"));
+    headers.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {}", settings.ai_service.api_key)).unwrap());
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-    let response = client.post("https://hub-agentartificial.ngrok.dev/v1/api/chat/completions")
+    let response = client.post(settings.ai_service.url + "/v1/chat/completions")
         .headers(headers)
         .json(&chat_req)
         .timeout(std::time::Duration::from_secs(30))

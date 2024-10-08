@@ -1,15 +1,16 @@
 mod chat_completions;
-mod completions;
+mod config;
 
 use std::convert::Infallible;
+use std::net::SocketAddr;
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::service::{make_service_fn, service_fn};
+use crate::config::Settings;
 
-async fn router(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+async fn router(req: Request<Body>, settings: Settings) -> Result<Response<Body>, hyper::Error> {
     println!("Received request: {} {}", req.method(), req.uri().path());
     match (req.method(), req.uri().path()) {
-        (&Method::POST, "/v1/chat/completions") => chat_completions::handle_chat_completion(req).await,
-        (&Method::POST, "/v1/completions") => completions::handle_completion(req).await,
+        (&Method::POST, "/v1/chat/completions") => chat_completions::handle_chat_completion(req, settings).await,
         (&Method::GET, "/health") => health_check(req).await,
         _ => {
             println!("No route matched, returning 404");
@@ -33,18 +34,28 @@ async fn not_found() -> Result<Response<Body>, hyper::Error> {
 }
 
 #[tokio::main]
-async fn main() {
-    let addr = ([127, 0, 0, 1], 3000).into();
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let settings = Settings::new()?;
 
-    let make_svc = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(router))
+    let addr: SocketAddr = format!("{}:{}", settings.server.host, settings.server.port)
+        .parse()
+        .expect("Failed to parse address");
+
+    let make_svc = make_service_fn(|_conn| {
+        let settings = settings.clone();
+        async move {
+            Ok::<_, Infallible>(service_fn(move |req| {
+                let settings = settings.clone();
+                router(req, settings)
+            }))
+        }
     });
 
     let server = Server::bind(&addr).serve(make_svc);
 
     println!("The Roost is running on http://{}", addr);
 
-    if let Err(e) = server.await {
-        eprintln!("server error: {}", e);
-    }
+    server.await?;
+
+    Ok(())
 }
